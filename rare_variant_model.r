@@ -235,6 +235,21 @@ p_gamma_mc = function(k,s,n,g,a,r,t,alpha,beta,log=FALSE,nc=1) {
     
 }
 
+p_error = function(k,s,theta,n,g,a,r,t,eps,nc=1,log=FALSE) {
+    exp_int = exp_integral(s, theta, n, g, a, r, t)
+    d_i = as.numeric(mclapply(1:k, d_tilde, s = s, theta = theta, n = n, g = g, a = a, r = r, t = t, mc.cores = nc))
+    d_i[1] = d_i[1] + n*eps
+    exp_int = exp_int + n*eps
+    B_i = bell_polynomial_tilde_DP(k, d_i)
+    res = -exp_int + log(B_i)
+    if (log) {
+        return(res)
+    }
+    else {
+        return(exp(res))
+    }
+}
+
 mutation_rate_MOM = function(counts,AN,Ne,R,T,N0 = NULL) {
     ei = exp_integral(max(T),1,AN,0,Ne,R,T)
 
@@ -287,7 +302,7 @@ mutation_rate_MLE = function(counts,K,AN,Ne,R,T,N0 = NULL,start=0,nc=1) {
                 },
                 method="Brent",
                 lower=1e-5,
-                upper=1
+                upper=.01
             )
             tibble(theta = opt$par, LL = opt$value, num_sites = sum(.$n))
         }) 
@@ -324,7 +339,7 @@ mutation_rate_dist_MLE = function(counts_with_theta,K,AN,Ne,R,T,N0 = NULL,start=
                 },
                 method="L-BFGS-B",
                 lower=log(c(1e-7,1e-7)),
-                upper = log(rep(.1,2)),
+                upper = log(rep(.01,.1)),
                 control = list(factr=10,ndeps=rep(1e-8,2))
             )
             tibble(mean_theta = exp(opt$par[1]), sd_theta = exp(opt$par[2]), LL = opt$value, n = sum(.$n))
@@ -337,6 +352,45 @@ mutation_rate_dist_MLE = function(counts_with_theta,K,AN,Ne,R,T,N0 = NULL,start=
     } else {
         return(res %>% mutate(mu = mean_theta/(4*N0)))
     }
+}
+
+sequencing_error_fit = function(SFS,mutation_rates,K,AN,Ne,R,T,start=0,nc=1) {
+
+    d_i = as.numeric(mclapply(1:K, d_tilde, s = max(T), theta = 1, n = AN, g = 0, a = Ne, r = R, t = T, mc.cores = nc))
+    ei = exp_integral(max(T), 1, AN, 0, Ne, R, T)
+
+    SFS  %>%
+        inner_join(mutation_rates) %>%
+        group_by(ref_context,alt_context,methylation_level) %>%
+        do({
+            opt = optim(
+                par = log(c(.$theta[1],1e-8)),
+                fn = function(par) {
+
+                    par = exp(par)
+
+                    d_i_error = par[1]*d_i
+                    d_i_error[1] = d_i_error[1] + AN*par[2]
+
+                    ei_error = par[1]*ei
+                    ei_error = ei_error + AN*par[2]
+
+                    p_error = p_d(d_i_error, ei_error, 1)
+
+                    p_error_norm = normalize_vec(p_error)
+
+                    LL = sum(.$n*log(p_error_norm))
+
+                    -LL
+                },
+                method = "L-BFGS-B",
+                lower = log(c(1e-07, 1e-10)),
+                upper = log(rep(0.1, 1e-5)),
+                control = list(factr = 10, ndeps = rep(1e-5, 2))
+            )
+
+            tibble(theta = exp(opt$par[1]), error = exp(opt$par[2]),LL = opt$value)
+	})
 }
 
 optimize_with_infinite_sites = function(SFS, num_replace, n, g, Ne, R, T, nc = 1, ftol_rel = 1e-10, perturb_start = 0.1, K = 0.005 * n, start = 1) {
@@ -445,11 +499,12 @@ optimize_with_MOM_theta = function(SFS, num_replace, n, g, Ne, R, T, nc = 1, fto
             theory_norm = apply(as.matrix(theory[(start+1):nrow(theory),]),2,normalize_vec)
             LL = sum(counts*log(theory_norm),na.rm=TRUE)
             message(LL)
+	    #if (is.infinite(LL)) { LL = .Machine$double.xmax  }
             -LL
         },
         method="L-BFGS-B",
         upper=rep(log(10000),num_replace),
-        lower = rep(log(1e-2),num_replace),
+        lower = rep(log(1e-1),num_replace),
         control=list(ndeps=rep(1e-8,num_replace))
     )
 

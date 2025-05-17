@@ -1,0 +1,15 @@
+#!/bin/bash
+#SBATCH --output=logs/out_%A_%a.txt
+#SBATCH --error=logs/err_%A_%a.txt
+#SBATCH --array=101-200
+#SBATCH --time=2:00:00
+#SBATCH --cpus-per-task=20
+#SBATCH --nodes=1
+#SBATCH --mem=50G
+#SBATCH --partition=main
+
+#load the new modules
+module load gcc/11.3.0 openblas/0.3.20 r/4.2
+
+Rscript fit_real_data.r real_data_${SLURM_ARRAY_TASK_ID}.tsv 15 0.0004 0.025 10
+

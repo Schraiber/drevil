@@ -107,6 +107,28 @@ R = rep(0,length(Ne))
 `burnin` indicates the amount of time to "burn in" to equilibrum more anciently than `end_time`. We note that for rare alleles, a value as small as 1 or 2 is typically fine, but we recommend 10 as a standard setting. Typically, making this number larger does not increase the run time, as there is no simulation going on, it is simply accounted for with a numerical integral. 
 
 With a base population size in hand, first use the function `optimize_with_MOM_theta`, which has several arguments.
+`SFS` is the input data
+`num_replace` is the number of demographic history pieces to estimate; typically equal to `num_bin` if you initialize the history as above.
+`n` is the sample size (the same as `AN` in some other functions).
+`g` is the selection coefficient (typically 0 for demographic inference from e.g. synonymous sites).
+`Ne`, `R`, and `T` are the base demography parameters, as initialized above.
+`nc` is the number of cores.
+`ftol_rel` is the tolerance; suggested to leave at the default value.
+`perturb_start` is a boolean value that if 0 will use the supplied starting demography, or otherwise perturb each of the pieces to start from a random location. It is STRONGLY suggested to do multiple runs with `perturb_start = 1`. 
+`K` is the maximum allele frequency cutoff.
+`start` specifies which allele count to use as the lowest. `start = 0` will include monomorphic sites.
 
+With the output of this function in hand (or perhaps the best output of several random starts), the results can be refined using `optimize_full_likelihood_const`. 
+First, assuming `Ne_opt` is the output of `optimize_with_MOM_theta`, prepare a new starting demography
+```
+par = exp(Ne_opt$par)
+new_Ne = c(cur_Ne,par[1:num_replace],par[num_replace])
+```
+and then use it as your demography in `optimize_full_likelihood_const`, which has all the same input arguments as `optimize_with_MOM_theta`, except a couple are changed.
+`rel_reduce` replaces `ftol_rel`.
+`iter` tells how many iterations of coordinate ascent to do. We recommend at least 5-10.
+For this workflow, *DO NOT* use `perturb_start=1`, and instead set `perturb_start=0`. The whole point is to start from the good place you got using `optimize_with_MOM_theta`!
+
+For an example of this workflow in action, check out any of the real data analyses found in the `real_data` folder. 
 
 ## Running analyses from the manuscript

@@ -132,3 +132,6 @@ For this workflow, *DO NOT* use `perturb_start=1`, and instead set `perturb_star
 For an example of this workflow in action, check out any of the real data analyses found in the `real_data` folder. 
 
 ## Running analyses from the manuscript
+Scripts for running simulations from the manuscript can be found in the `sims` directory. 
+Real data analysis can be found in the `real_data` directory. The processed site frequency spectrum is `SFS_to_analyze.tsv.gz`. 
+All figures generated in the manuscript were made in the jupyter notebook `rare_alleles_figures_revision.ipynb`. They require data to be generated from the simulation scripts.
